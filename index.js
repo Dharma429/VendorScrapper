@@ -1762,6 +1762,13 @@ class TaxFormService {
   }
 }
 
+app.get('/status', (req, res) => {
+  res.json({
+    success: true,
+    message: 'API is running!',
+    timestamp: new Date().toISOString()
+  });
+});
 // === Enhanced Routes ===
 app.get('/fill-form', async (req, res) => {
   try {
