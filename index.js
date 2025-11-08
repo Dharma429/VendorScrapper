@@ -58,7 +58,16 @@ const CONFIG = {
     oshaLink: 'https://www.osha.gov/ords/imis/establishment.html'
   }
 };
-
+// === Ensure required folders exist ===
+(async () => {
+  try {
+    await fs.mkdir(CONFIG.SCREENSHOT_DIR, { recursive: true });
+    await fs.mkdir('./output', { recursive: true });
+    console.log(`✅ Folders ready: ${CONFIG.SCREENSHOT_DIR}, ./output`);
+  } catch (err) {
+    console.error('Error creating folders:', err);
+  }
+})();
 // === Setup ===
 chromium.use(stealth);
 const app = express();
@@ -66,6 +75,7 @@ const app = express();
 // Middleware
 app.use(cors());
 app.use(express.json());
+
 
 // === Enhanced Utility Functions ===
 class BrowserUtils {
