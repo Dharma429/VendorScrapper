@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
+    "postinstall": "npx playwright install --with-deps chromium",
     "start-headless": "HEADLESS=true",
     "keep-browser": "KEEP_BROWSER_OPEN=true"
   },

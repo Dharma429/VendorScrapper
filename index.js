@@ -15,7 +15,7 @@ const EmailService = require('./emailService');
 
 // === Enhanced Configuration ===
 const CONFIG = {
-  PORT: 3001,
+  PORT: process.env.PORT || 3001,
   SCREENSHOT_DIR: 'screenshots',
   WAIT_TIMES: {
     PAGE_LOAD: 3500,
