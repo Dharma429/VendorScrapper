@@ -24,11 +24,7 @@ const CONFIG = {
       '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
       '--disable-gpu',
-      '--disable-web-security',
-      '--disable-features=VizDisplayCompositor',
-      '--disable-background-timer-throttling',
-      '--disable-backgrounding-occluded-windows',
-      '--disable-renderer-backgrounding'
+      '--single-process'
     ]
   }
 };
@@ -38,6 +34,9 @@ class BrowserInstaller {
   static async ensureBrowserInstalled() {
     try {
       console.log('🔍 Checking if Playwright browser is available...');
+      
+      // Set the browser path explicitly
+      process.env.PLAYWRIGHT_BROWSERS_PATH = './node_modules/playwright/.local-browsers';
       
       // Try to launch browser to verify installation
       const browser = await chromium.launch({ 
@@ -49,36 +48,11 @@ class BrowserInstaller {
       return true;
     } catch (error) {
       console.log('❌ Browser not available:', error.message);
-      return await this.installBrowser();
-    }
-  }
-
-  static async installBrowser() {
-    try {
-      console.log('⚡ Installing Playwright browser...');
-      
-      // Set the browser path to a location we control
-      process.env.PLAYWRIGHT_BROWSERS_PATH = './node_modules/playwright/.local-browsers';
-      
-      // Install chromium browser
-      execSync('npx playwright install chromium', { 
-        stdio: 'inherit',
-        timeout: 120000
-      });
-      
-      console.log('✅ Playwright browser installed successfully');
-      return true;
-    } catch (error) {
-      console.error('❌ Failed to install browser:', error.message);
+      console.log('💡 Run: node install-browsers.js to install browsers');
       return false;
     }
   }
 }
-
-// Initialize browser check on startup
-(async () => {
-  await BrowserInstaller.ensureBrowserInstalled();
-})();
 
 const app = express();
 app.use(cors());
@@ -87,43 +61,33 @@ app.use(express.json());
 // === Enhanced Browser Management ===
 class BrowserManager {
   static async createBrowser() {
-    let retryCount = 0;
-    const maxRetries = 2;
-    
-    while (retryCount < maxRetries) {
-      try {
-        console.log(`🔄 Attempting to launch browser (attempt ${retryCount + 1})...`);
-        
-        const browser = await chromium.launch({
-          headless: CONFIG.BROWSER.HEADLESS,
-          args: CONFIG.BROWSER.ARGS
-        });
+    try {
+      console.log('🔄 Attempting to launch browser...');
+      
+      // Set explicit browser path
+      process.env.PLAYWRIGHT_BROWSERS_PATH = './node_modules/playwright/.local-browsers';
+      
+      const browser = await chromium.launch({
+        headless: CONFIG.BROWSER.HEADLESS,
+        args: CONFIG.BROWSER.ARGS
+      });
 
-        const context = await browser.newContext({
-          viewport: { width: 1280, height: 720 },
-          ignoreHTTPSErrors: true
-        });
+      const context = await browser.newContext({
+        viewport: { width: 1280, height: 720 },
+        ignoreHTTPSErrors: true
+      });
 
-        console.log('✅ Browser launched successfully');
-        return { browser, context };
-        
-      } catch (error) {
-        retryCount++;
-        console.error(`❌ Browser launch failed (attempt ${retryCount}):`, error.message);
-        
-        if (error.message.includes('Executable doesn\'t exist') && retryCount < maxRetries) {
-          console.log('🔄 Browser missing, attempting installation...');
-          await BrowserInstaller.installBrowser();
-          continue;
-        }
-        
-        throw error;
-      }
+      console.log('✅ Browser launched successfully');
+      return { browser, context };
+      
+    } catch (error) {
+      console.error('❌ Browser launch failed:', error.message);
+      throw new Error(`Browser not available. Please ensure browsers are installed: ${error.message}`);
     }
   }
 }
 
-// === Your Existing Service Class ===
+// === Your Service Class ===
 class TaxFormService {
   static async processAllUrls(businessName = 'AC Trench Corp') {
     let browser = null;
@@ -157,7 +121,7 @@ class TaxFormService {
 app.get('/status', (req, res) => {
   res.json({
     success: true,
-    message: 'API is V3.o running!',
+    message: 'API is V4.0 running!',
     timestamp: new Date().toISOString()
   });
 });
@@ -177,21 +141,22 @@ app.get('/fill-form', async (req, res) => {
     console.error('Route error:', error.message);
     res.status(500).json({
       error: 'Failed to process request',
-      details: error.message
+      details: error.message,
+      solution: 'Browsers may not be installed. Check deployment logs.'
     });
   }
 });
 
-// Health check with browser verification
+// Health check
 app.get('/health', async (req, res) => {
   try {
     const browserAvailable = await BrowserInstaller.ensureBrowserInstalled();
     
     res.json({ 
-      status: 'healthy', 
+      status: browserAvailable ? 'healthy' : 'degraded',
       browserAvailable,
       timestamp: new Date().toISOString(),
-      version: '2.0'
+      message: browserAvailable ? 'Ready' : 'Browsers not installed'
     });
   } catch (error) {
     res.status(500).json({
@@ -199,6 +164,25 @@ app.get('/health', async (req, res) => {
       browserAvailable: false,
       error: error.message
     });
+  }
+});
+
+// Install browsers endpoint (for manual installation)
+app.post('/install-browsers', async (req, res) => {
+  try {
+    console.log('Manual browser installation requested...');
+    const { execSync } = require('child_process');
+    execSync('node install-browsers.js', { stdio: 'inherit' });
+    res.json({ success: true, message: 'Browsers installed successfully' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Initialize browser check on startup
+BrowserInstaller.ensureBrowserInstalled().then(success => {
+  if (!success) {
+    console.log('⚠️  Browsers not available. Some functionality will be limited.');
   }
 });
 

@@ -4,16 +4,12 @@
   "description": "Backend service to analyze product pages and generate checkout questions.",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js",
+    "start": "./start.sh",
     "dev": "node --watch index.js",
     "postinstall": "npx playwright install chromium",
     "install-browsers": "npx playwright install chromium",
-    "install-all-browsers": "npx playwright install",
-    "debug-install": "npx playwright install --dry-run chromium",
-    "test": "echo \"No tests specified\" && exit 0",
-    "build": "echo \"No build step required\"",
-    "azure-start": "npm run install-browsers-azure && node index.js",
-    "install-browsers-azure": "PLAYWRIGHT_BROWSERS_PATH=./node_modules/playwright/.local-browsers npx playwright install chromium"
+    "docker-start": "node install-browsers.js && node index.js",
+    "test": "echo \"No tests specified\" && exit 0"
   },
   "engines": {
     "node": ">=18.0.0",
@@ -44,13 +40,5 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.40.0"
-  },
-  "repository": {
-    "type": "git",
-    "url": "your-repository-url"
-  },
-  "bugs": {
-    "url": "your-repository-issues-url"
-  },
-  "homepage": "your-homepage-url"
+  }
 }

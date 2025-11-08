@@ -8,7 +8,6 @@ on:
 
 env:
   NODE_VERSION: '20.x'
-  PLAYWRIGHT_BROWSERS_PATH: './node_modules/playwright/.local-browsers'
 
 jobs:
   build:
@@ -26,26 +25,57 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
 
-      - name: Install dependencies
+      - name: Install dependencies with Playwright
         run: |
+          # Install all dependencies including Playwright
           npm ci
-          # Install Playwright browser specifically
+          # Install Playwright browsers to local directory
           npx playwright install chromium
-
-      - name: Verify browser installation
-        run: |
-          echo "Checking Playwright browser installation..."
-          ls -la node_modules/playwright/.local-browsers/ || echo "No local browsers directory"
+          # Verify installation
           npx playwright --version
-          # Test if browser can be launched
-          node -e "const { chromium } = require('playwright'); console.log('Playwright import successful')"
+          ls -la node_modules/playwright/.local-browsers/ || echo "Checking browser location"
 
-      - name: Create deployment package
+      - name: Bundle browsers with deployment
         run: |
-          # Ensure browsers are properly included
-          mkdir -p node_modules/playwright/.local-browsers
-          # Verify browsers exist
-          find node_modules/playwright -name "*chromium*" -type f | head -10 || echo "No chromium files found"
+          # Create a script to install browsers on Azure
+          cat > install-browsers.js << 'EOF'
+          const { execSync } = require('child_process');
+          const fs = require('fs');
+          
+          console.log('Installing Playwright browsers...');
+          try {
+            execSync('npx playwright install chromium', { stdio: 'inherit' });
+            console.log('Playwright browsers installed successfully');
+          } catch (error) {
+            console.error('Failed to install browsers:', error.message);
+            process.exit(1);
+          }
+          EOF
+
+          # Create startup script for Azure
+          cat > start.sh << 'EOF'
+          #!/bin/bash
+          echo "Checking Playwright browser installation..."
+          
+          # Try to install browsers if missing
+          if [ ! -d "node_modules/playwright/.local-browsers" ]; then
+            echo "Browsers not found, installing..."
+            node install-browsers.js
+          fi
+          
+          echo "Starting application..."
+          node index.js
+          EOF
+          
+          chmod +x start.sh
+
+      - name: Verify deployment package
+        run: |
+          echo "=== Deployment Package Contents ==="
+          find . -name "playwright*" -type d | head -10
+          find node_modules -name "*chromium*" -type f | head -10 || echo "No chromium files found"
+          echo "=== Node modules size ==="
+          du -sh node_modules/ || echo "No node_modules"
 
       - name: Upload artifact for deployment
         uses: actions/upload-artifact@v4
@@ -59,7 +89,6 @@ jobs:
     needs: build
     environment:
       name: 'Production'
-      url: ${{ steps.deploy-to-webapp.outputs.webapp-url }}
 
     steps:
       - name: Download artifact from build job
@@ -68,14 +97,7 @@ jobs:
           name: node-app
           path: .
 
-      - name: Verify deployment package
-        run: |
-          echo "Verifying deployment package..."
-          ls -la node_modules/playwright/.local-browsers/ || echo "No browsers directory in deployment"
-          find node_modules/playwright -name "*chrome*" -type f | head -5 || echo "No chrome files found"
-
       - name: 'Deploy to Azure Web App'
-        id: deploy-to-webapp
         uses: azure/webapps-deploy@v3
         with:
           app-name: 'VendorCheckApi'
