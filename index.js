@@ -13,6 +13,8 @@ const CONFIG = {
   NODE_ENV: process.env.NODE_ENV || 'development',
   BROWSER: {
     HEADLESS: true,
+    // Use the exact executable path from the Playwright Docker image
+    EXECUTABLE_PATH: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || '/ms-playwright/chromium-*/chrome-linux/chrome',
     ARGS: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
@@ -20,7 +22,6 @@ const CONFIG = {
       '--disable-gpu',
       '--single-process',
       '--no-zygote',
-      '--disable-setuid-sandbox',
       '--disable-web-security',
       '--disable-features=VizDisplayCompositor',
       '--disable-background-timer-throttling',
@@ -42,15 +43,58 @@ app.use(express.urlencoded({ extended: true }));
 
 // === Browser Management ===
 class BrowserManager {
+  static async findChromiumPath() {
+    try {
+      // Try to find Chromium in the Docker image location
+      const possiblePaths = [
+        '/ms-playwright/chromium-*/chrome-linux/chrome',
+        '/ms-playwright/chromium-*/chrome-linux/chromium',
+        '/ms-playwright/chromium-*/chrome-linux/headless_shell',
+        process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH
+      ];
+
+      for (const pattern of possiblePaths) {
+        try {
+          const { execSync } = require('child_process');
+          const result = execSync(`ls -la ${pattern} 2>/dev/null | head -1`, { encoding: 'utf8' }).trim();
+          if (result && !result.includes('No such file')) {
+            const actualPath = pattern.replace('*', result.split('/')[2]); // Extract version
+            console.log(`✅ Found Chromium at: ${actualPath}`);
+            return actualPath;
+          }
+        } catch (e) {
+          // Continue to next pattern
+        }
+      }
+
+      console.log('⚠️ Could not find Chromium path, using default');
+      return null;
+    } catch (error) {
+      console.log('⚠️ Error finding Chromium path:', error.message);
+      return null;
+    }
+  }
+
   static async createBrowser() {
     try {
       console.log('🔄 Launching Chromium browser...');
       
-      const browser = await chromium.launch({
+      // Find the correct Chromium path
+      const executablePath = await this.findChromiumPath();
+      
+      const launchOptions = {
         headless: CONFIG.BROWSER.HEADLESS,
         args: CONFIG.BROWSER.ARGS,
         timeout: 30000
-      });
+      };
+
+      // Only set executablePath if we found it
+      if (executablePath) {
+        launchOptions.executablePath = executablePath;
+        console.log(`🔧 Using Chromium from: ${executablePath}`);
+      }
+
+      const browser = await chromium.launch(launchOptions);
 
       const context = await browser.newContext({
         viewport: { width: 1280, height: 720 },
@@ -63,6 +107,29 @@ class BrowserManager {
       
     } catch (error) {
       console.error('❌ Browser launch failed:', error.message);
+      
+      // Try fallback method without executablePath
+      if (error.message.includes('Executable doesn\'t exist')) {
+        console.log('🔄 Trying fallback browser launch...');
+        try {
+          const browser = await chromium.launch({
+            headless: CONFIG.BROWSER.HEADLESS,
+            args: CONFIG.BROWSER.ARGS,
+            timeout: 30000
+          });
+
+          const context = await browser.newContext({
+            viewport: { width: 1280, height: 720 },
+            ignoreHTTPSErrors: true
+          });
+
+          console.log('✅ Fallback browser launch successful');
+          return { browser, context };
+        } catch (fallbackError) {
+          console.error('❌ Fallback browser launch also failed:', fallbackError.message);
+        }
+      }
+      
       throw new Error(`Browser launch failed: ${error.message}`);
     }
   }
@@ -82,6 +149,9 @@ class BrowserManager {
       
       const title = await page.title();
       console.log(`✅ Browser test successful - Page title: ${title}`);
+      
+      // Take a screenshot to verify it works
+      await page.screenshot({ path: '/tmp/browser-test.png' });
       
       return { success: true, title };
     } catch (error) {
@@ -170,7 +240,7 @@ app.get('/', (req, res) => {
 app.get('/status', (req, res) => {
   res.json({
     success: true,
-    message: 'API is 7.0 running!',
+    message: 'API is 0.1 running!',
     timestamp: new Date().toISOString(),
     environment: CONFIG.NODE_ENV
   });
@@ -181,7 +251,7 @@ app.get('/health', async (req, res) => {
     const browserTest = await BrowserManager.testBrowser();
     
     res.json({ 
-      status: 'healthy',
+      status: browserTest.success ? 'healthy' : 'degraded',
       browser: browserTest.success ? 'available' : 'unavailable',
       timestamp: new Date().toISOString(),
       environment: CONFIG.NODE_ENV,
@@ -219,7 +289,7 @@ app.get('/fill-form', async (req, res) => {
     res.status(500).json({
       error: 'Failed to process request',
       details: error.message,
-      solution: 'Check if browsers are properly installed in the container'
+      solution: 'Browser may not be properly installed in the container'
     });
   }
 });
@@ -252,7 +322,6 @@ app.get('/test-browser', async (req, res) => {
     });
   }
 });
-
 // Error handling middleware
 app.use((error, req, res, next) => {
   console.error('Unhandled error:', error);
@@ -273,7 +342,8 @@ app.use('*', (req, res) => {
       'GET /status', 
       'GET /health',
       'GET /fill-form',
-      'GET /test-browser'
+      'GET /test-browser',
+      'GET /debug-browsers'
     ]
   });
 });
@@ -296,6 +366,7 @@ async function startServer() {
       console.log(`🎉 Server running on http://0.0.0.0:${CONFIG.PORT}`);
       console.log(`📊 Health check: http://0.0.0.0:${CONFIG.PORT}/health`);
       console.log(`🩺 Browser test: http://0.0.0.0:${CONFIG.PORT}/test-browser`);
+      console.log(`🐛 Debug info: http://0.0.0.0:${CONFIG.PORT}/debug-browsers`);
     });
     
   } catch (error) {
