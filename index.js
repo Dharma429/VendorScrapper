@@ -8,7 +8,9 @@ const path = require('path');
 // === Configuration ===
 const CONFIG = {
   PORT: process.env.PORT || 8080,
-  SCREENSHOT_DIR: 'screenshots',
+  SCREENSHOT_DIR: process.env.SCREENSHOT_DIR || '/app/screenshots',
+  OUTPUT_DIR: process.env.OUTPUT_DIR || '/app/output',
+  NODE_ENV: process.env.NODE_ENV || 'development',
   BROWSER: {
     HEADLESS: true,
     ARGS: [
@@ -16,29 +18,44 @@ const CONFIG = {
       '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
       '--disable-gpu',
-      '--single-process'
+      '--single-process',
+      '--no-zygote',
+      '--disable-setuid-sandbox',
+      '--disable-web-security',
+      '--disable-features=VizDisplayCompositor',
+      '--disable-background-timer-throttling',
+      '--disable-backgrounding-occluded-windows',
+      '--disable-renderer-backgrounding'
     ]
   }
 };
 
+console.log('🚀 Starting Vendor Check API...');
+console.log(`📁 Screenshot directory: ${CONFIG.SCREENSHOT_DIR}`);
+console.log(`📁 Output directory: ${CONFIG.OUTPUT_DIR}`);
+console.log(`🌍 Environment: ${CONFIG.NODE_ENV}`);
+
 const app = express();
 app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // === Browser Management ===
 class BrowserManager {
   static async createBrowser() {
     try {
-      console.log('🔄 Launching browser...');
+      console.log('🔄 Launching Chromium browser...');
       
       const browser = await chromium.launch({
         headless: CONFIG.BROWSER.HEADLESS,
-        args: CONFIG.BROWSER.ARGS
+        args: CONFIG.BROWSER.ARGS,
+        timeout: 30000
       });
 
       const context = await browser.newContext({
         viewport: { width: 1280, height: 720 },
-        ignoreHTTPSErrors: true
+        ignoreHTTPSErrors: true,
+        userAgent: 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
       });
 
       console.log('✅ Browser launched successfully');
@@ -49,11 +66,39 @@ class BrowserManager {
       throw new Error(`Browser launch failed: ${error.message}`);
     }
   }
+
+  static async testBrowser() {
+    let browser = null;
+    try {
+      console.log('🧪 Testing browser functionality...');
+      const { browser: b, context } = await this.createBrowser();
+      browser = b;
+      const page = await context.newPage();
+      
+      await page.goto('https://example.com', { 
+        waitUntil: 'domcontentloaded',
+        timeout: 15000 
+      });
+      
+      const title = await page.title();
+      console.log(`✅ Browser test successful - Page title: ${title}`);
+      
+      return { success: true, title };
+    } catch (error) {
+      console.error('❌ Browser test failed:', error.message);
+      return { success: false, error: error.message };
+    } finally {
+      if (browser) {
+        await browser.close();
+        console.log('🔚 Test browser closed');
+      }
+    }
+  }
 }
 
 // === Tax Form Service ===
 class TaxFormService {
-  static async processAllUrls(businessName = 'AC Trench Corp') {
+  static async processBusiness(businessName = 'AC Trench Corp') {
     let browser = null;
     
     try {
@@ -63,29 +108,33 @@ class TaxFormService {
       browser = b;
       const page = await context.newPage();
       
-      // Example: Navigate to a test page
+      // Example processing - navigate to a test page
       console.log('📝 Navigating to example.com...');
       await page.goto('https://example.com', { 
         waitUntil: 'domcontentloaded',
         timeout: 30000 
       });
       
-      // Take a screenshot to verify it works
-      await fs.mkdir(CONFIG.SCREENSHOT_DIR, { recursive: true });
+      // Take screenshot as proof of functionality
+      const screenshotPath = path.join(CONFIG.SCREENSHOT_DIR, `test-${Date.now()}.png`);
       await page.screenshot({ 
-        path: path.join(CONFIG.SCREENSHOT_DIR, 'test.png'),
+        path: screenshotPath,
         fullPage: true 
       });
+      
+      const title = await page.title();
       
       console.log('✅ Processing completed successfully');
       return { 
         success: true, 
         message: 'Processing completed',
-        screenshot: 'test.png'
+        businessName,
+        title,
+        screenshot: path.basename(screenshotPath)
       };
       
     } catch (error) {
-      console.error('❌ Error in TaxFormService:', error.message);
+      console.error('❌ Error processing business:', error.message);
       throw error;
     } finally {
       if (browser) {
@@ -96,29 +145,51 @@ class TaxFormService {
   }
 }
 
+// === Initialize Directories ===
+async function initializeDirectories() {
+  try {
+    await fs.mkdir(CONFIG.SCREENSHOT_DIR, { recursive: true });
+    await fs.mkdir(CONFIG.OUTPUT_DIR, { recursive: true });
+    console.log('✅ Directories initialized successfully');
+  } catch (error) {
+    console.error('❌ Directory initialization failed:', error.message);
+  }
+}
+
 // === Routes ===
+app.get('/', (req, res) => {
+  res.json({
+    success: true,
+    message: 'Vendor Check API is running!',
+    version: '1.0.0',
+    timestamp: new Date().toISOString(),
+    environment: CONFIG.NODE_ENV
+  });
+});
+
 app.get('/status', (req, res) => {
   res.json({
     success: true,
-    message: 'API is V5.0 running!',
+    message: 'API is 7.0 running!',
     timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV || 'development'
+    environment: CONFIG.NODE_ENV
   });
 });
 
 app.get('/health', async (req, res) => {
   try {
-    // Test browser availability
-    const browser = await chromium.launch({ 
-      headless: true,
-      args: CONFIG.BROWSER.ARGS 
-    });
-    await browser.close();
+    const browserTest = await BrowserManager.testBrowser();
     
     res.json({ 
       status: 'healthy',
-      browser: 'available',
-      timestamp: new Date().toISOString()
+      browser: browserTest.success ? 'available' : 'unavailable',
+      timestamp: new Date().toISOString(),
+      environment: CONFIG.NODE_ENV,
+      details: {
+        screenshotDir: CONFIG.SCREENSHOT_DIR,
+        outputDir: CONFIG.OUTPUT_DIR,
+        browserTest: browserTest
+      }
     });
   } catch (error) {
     res.status(500).json({
@@ -135,7 +206,7 @@ app.get('/fill-form', async (req, res) => {
     const businessName = req.query.businessName || 'AC Trench Corp';
     console.log(`📋 Processing request for: ${businessName}`);
     
-    const result = await TaxFormService.processAllUrls(businessName);
+    const result = await TaxFormService.processBusiness(businessName);
     
     res.json({
       success: true,
@@ -147,60 +218,93 @@ app.get('/fill-form', async (req, res) => {
     console.error('Route error:', error.message);
     res.status(500).json({
       error: 'Failed to process request',
-      details: error.message
+      details: error.message,
+      solution: 'Check if browsers are properly installed in the container'
     });
   }
 });
 
-// Test browser endpoint
 app.get('/test-browser', async (req, res) => {
-  let browser = null;
   try {
-    console.log('🧪 Testing browser functionality...');
+    const result = await BrowserManager.testBrowser();
     
-    const { browser: b, context } = await BrowserManager.createBrowser();
-    browser = b;
-    const page = await context.newPage();
-    
-    await page.goto('https://example.com', { waitUntil: 'domcontentloaded' });
-    const title = await page.title();
-    
-    await page.screenshot({ path: '/tmp/test-browser.png' });
-    
-    res.json({
-      success: true,
-      message: 'Browser test successful',
-      title: title,
-      screenshot: 'test-browser.png'
-    });
-    
+    if (result.success) {
+      res.json({
+        success: true,
+        message: 'Browser test successful',
+        title: result.title,
+        timestamp: new Date().toISOString()
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        message: 'Browser test failed',
+        error: result.error,
+        timestamp: new Date().toISOString()
+      });
+    }
   } catch (error) {
     res.status(500).json({
       success: false,
-      error: error.message
+      message: 'Browser test failed',
+      error: error.message,
+      timestamp: new Date().toISOString()
     });
-  } finally {
-    if (browser) {
-      await browser.close();
-    }
   }
 });
 
-// Initialize
-(async () => {
+// Error handling middleware
+app.use((error, req, res, next) => {
+  console.error('Unhandled error:', error);
+  res.status(500).json({
+    success: false,
+    error: 'Internal server error',
+    message: error.message
+  });
+});
+
+// 404 handler
+app.use('*', (req, res) => {
+  res.status(404).json({
+    success: false,
+    error: 'Endpoint not found',
+    availableEndpoints: [
+      'GET /',
+      'GET /status', 
+      'GET /health',
+      'GET /fill-form',
+      'GET /test-browser'
+    ]
+  });
+});
+
+// === Startup ===
+async function startServer() {
   try {
-    await fs.mkdir(CONFIG.SCREENSHOT_DIR, { recursive: true });
-    await fs.mkdir('output', { recursive: true });
-    console.log('✅ Directories initialized');
+    // Initialize directories
+    await initializeDirectories();
+    
+    // Test browser on startup
+    console.log('🔧 Testing browser on startup...');
+    const browserTest = await BrowserManager.testBrowser();
+    if (!browserTest.success) {
+      console.warn('⚠️ Browser test failed on startup. Some functionality may be limited.');
+    }
+    
+    // Start server
+    app.listen(CONFIG.PORT, '0.0.0.0', () => {
+      console.log(`🎉 Server running on http://0.0.0.0:${CONFIG.PORT}`);
+      console.log(`📊 Health check: http://0.0.0.0:${CONFIG.PORT}/health`);
+      console.log(`🩺 Browser test: http://0.0.0.0:${CONFIG.PORT}/test-browser`);
+    });
+    
   } catch (error) {
-    console.error('❌ Directory initialization failed:', error);
+    console.error('❌ Failed to start server:', error);
+    process.exit(1);
   }
-})();
+}
 
-// Start server
-app.listen(CONFIG.PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${CONFIG.PORT}`);
-  console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
-});
+// Start the application
+startServer();
 
-module.exports = { app };
+module.exports = { app, BrowserManager, TaxFormService };

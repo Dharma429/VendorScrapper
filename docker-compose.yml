@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  vendor-check-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vendor-check-api
+    ports:
+      - "3001:8080"
+    environment:
+      - NODE_ENV=production
+      - PORT=8080
+      - SCREENSHOT_DIR=/app/screenshots
+      - OUTPUT_DIR=/app/output
+    volumes:
+      - ./screenshots:/app/screenshots
+      - ./output:/app/output
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s

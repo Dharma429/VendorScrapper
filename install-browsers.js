@@ -1,37 +1,42 @@
-// install-browsers.js
+// install-browsers.js - Helper script for browser installation
 const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
-console.log('🔧 Starting Playwright browser installation...');
+console.log('🔧 Playwright Browser Installation Script');
+console.log('=========================================');
 
 try {
-  // Set environment variable to control browser installation path
-  process.env.PLAYWRIGHT_BROWSERS_PATH = path.join(__dirname, 'node_modules', 'playwright', '.local-browsers');
+  console.log('📁 Current directory:', process.cwd());
+  console.log('🔍 Checking Playwright installation...');
   
-  console.log('📁 Browser installation path:', process.env.PLAYWRIGHT_BROWSERS_PATH);
-  
-  // Create the directory if it doesn't exist
-  if (!fs.existsSync(process.env.PLAYWRIGHT_BROWSERS_PATH)) {
-    fs.mkdirSync(process.env.PLAYWRIGHT_BROWSERS_PATH, { recursive: true });
+  // Check if Playwright is available
+  try {
+    const playwrightVersion = execSync('npx playwright --version', { encoding: 'utf8' }).trim();
+    console.log('✅ Playwright version:', playwrightVersion);
+  } catch (error) {
+    console.log('❌ Playwright not available via npx');
   }
   
-  // Install chromium browser
+  // Install browsers
   console.log('⚡ Installing Chromium browser...');
   execSync('npx playwright install chromium', { 
     stdio: 'inherit',
     timeout: 120000 
   });
   
-  console.log('✅ Playwright browsers installed successfully!');
+  console.log('✅ Browser installation completed!');
   
   // Verify installation
-  console.log('🔍 Verifying installation...');
-  const browsersDir = path.join(process.env.PLAYWRIGHT_BROWSERS_PATH, 'chromium*');
-  const files = fs.readdirSync(process.env.PLAYWRIGHT_BROWSERS_PATH);
-  console.log('📁 Browser files:', files);
+  console.log('🔍 Verifying browser installation...');
+  try {
+    const { chromium } = require('playwright');
+    console.log('✅ Playwright module loaded successfully');
+  } catch (error) {
+    console.log('❌ Failed to load Playwright:', error.message);
+  }
   
 } catch (error) {
-  console.error('❌ Failed to install browsers:', error.message);
+  console.error('❌ Browser installation failed:', error.message);
   process.exit(1);
 }

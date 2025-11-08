@@ -7,7 +7,11 @@
     "start": "node index.js",
     "dev": "node --watch index.js",
     "docker:build": "docker build -t vendor-check-api .",
-    "docker:run": "docker run -p 8080:8080 vendor-check-api",
+    "docker:run": "docker run -p 3001:8080 vendor-check-api",
+    "docker:dev": "docker-compose up --build",
+    "docker:stop": "docker-compose down",
+    "docker:logs": "docker-compose logs -f",
+    "docker:clean": "docker system prune -f",
     "test": "echo \"No tests specified\" && exit 0"
   },
   "engines": {
