@@ -11,7 +11,9 @@
     "install-all-browsers": "npx playwright install",
     "debug-install": "npx playwright install --dry-run chromium",
     "test": "echo \"No tests specified\" && exit 0",
-    "build": "echo \"No build step required\""
+    "build": "echo \"No build step required\"",
+    "azure-start": "npm run install-browsers-azure && node index.js",
+    "install-browsers-azure": "PLAYWRIGHT_BROWSERS_PATH=./node_modules/playwright/.local-browsers npx playwright install chromium"
   },
   "engines": {
     "node": ">=18.0.0",
@@ -50,9 +52,5 @@
   "bugs": {
     "url": "your-repository-issues-url"
   },
-  "homepage": "your-homepage-url",
-  "cacheDirectories": [
-    "node_modules",
-    ".cache/ms-playwright"
-  ]
+  "homepage": "your-homepage-url"
 }

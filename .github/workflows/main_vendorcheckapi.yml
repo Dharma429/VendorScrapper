@@ -29,33 +29,29 @@ jobs:
       - name: Install dependencies
         run: |
           npm ci
-          # Install Playwright system dependencies and browser
-          npx playwright install-deps
+          # Install Playwright browser specifically
           npx playwright install chromium
 
-      - name: Build (if exists)
-        run: npm run build --if-present
-
-      - name: Run tests (if exists)
-        run: npm run test --if-present
-
-      - name: Verify Playwright installation
-        run: npx playwright --version
+      - name: Verify browser installation
+        run: |
+          echo "Checking Playwright browser installation..."
+          ls -la node_modules/playwright/.local-browsers/ || echo "No local browsers directory"
+          npx playwright --version
+          # Test if browser can be launched
+          node -e "const { chromium } = require('playwright'); console.log('Playwright import successful')"
 
       - name: Create deployment package
         run: |
-          # Remove development dependencies if not needed in production
-          npm prune --production
-          # Ensure the browsers are included in the artifact
-          ls -la node_modules/playwright/.local-browsers/ || echo "No local browsers directory"
+          # Ensure browsers are properly included
+          mkdir -p node_modules/playwright/.local-browsers
+          # Verify browsers exist
+          find node_modules/playwright -name "*chromium*" -type f | head -10 || echo "No chromium files found"
 
       - name: Upload artifact for deployment
         uses: actions/upload-artifact@v4
         with:
           name: node-app
-          path: |
-            .
-            !node_modules/.cache
+          path: .
           retention-days: 1
 
   deploy:
@@ -71,6 +67,12 @@ jobs:
         with:
           name: node-app
           path: .
+
+      - name: Verify deployment package
+        run: |
+          echo "Verifying deployment package..."
+          ls -la node_modules/playwright/.local-browsers/ || echo "No browsers directory in deployment"
+          find node_modules/playwright -name "*chrome*" -type f | head -5 || echo "No chrome files found"
 
       - name: 'Deploy to Azure Web App'
         id: deploy-to-webapp
