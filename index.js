@@ -342,8 +342,7 @@ app.use('*', (req, res) => {
       'GET /status', 
       'GET /health',
       'GET /fill-form',
-      'GET /test-browser',
-      'GET /debug-browsers'
+      'GET /test-browser'
     ]
   });
 });
