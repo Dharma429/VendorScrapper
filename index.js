@@ -1,17 +1,17 @@
 // === Required Modules ===
 const express = require('express');
 const cors = require('cors');
-const { chromium } = require('playwright-extra');
-const stealth = require('puppeteer-extra-plugin-stealth')();
+const { chromium } = require('playwright'); // Removed playwright-extra
 const fs = require('fs').promises;
 const path = require('path');
 const PDFDocument = require('pdfkit');
-const { Document, Paragraph, ImageRun, HeadingLevel, AlignmentType } = require("docx");
+const { Document, Paragraph, ImageRun, HeadingLevel, AlignmentType, Packer } = require("docx");
 const fs1 = require('fs');
-const { promisify } = require('util');
-const { exec } = require('child_process');
+const { execSync } = require('child_process'); // Fixed import
 const nodemailer = require('nodemailer');
 const EmailService = require('./emailService');
+
+
 
 // === Enhanced Configuration ===
 const CONFIG = {
@@ -72,7 +72,6 @@ const CONFIG = {
 })();
 
 // === Setup ===
-chromium.use(stealth);
 // === Ensure Chromium is installed (for Azure App Service) ===
 (async () => {
   try {

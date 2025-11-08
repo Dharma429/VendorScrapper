@@ -6,25 +6,32 @@ on:
       - main
   workflow_dispatch:
 
+env:
+  NODE_VERSION: '20.x'
+  PLAYWRIGHT_BROWSERS_PATH: './node_modules/playwright/.local-browsers'
+
 jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: read # Required for actions/checkout
+      contents: read
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v3
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          node-version: '20.x' # Use a stable LTS version
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
 
       - name: Install dependencies
-        run: npm install
-
-      - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
+        run: |
+          npm ci
+          # Install Playwright system dependencies and browser
+          npx playwright install-deps
+          npx playwright install chromium
 
       - name: Build (if exists)
         run: npm run build --if-present
@@ -32,23 +39,41 @@ jobs:
       - name: Run tests (if exists)
         run: npm run test --if-present
 
+      - name: Verify Playwright installation
+        run: npx playwright --version
+
+      - name: Create deployment package
+        run: |
+          # Remove development dependencies if not needed in production
+          npm prune --production
+          # Ensure the browsers are included in the artifact
+          ls -la node_modules/playwright/.local-browsers/ || echo "No local browsers directory"
+
       - name: Upload artifact for deployment
         uses: actions/upload-artifact@v4
         with:
           name: node-app
-          path: .
+          path: |
+            .
+            !node_modules/.cache
+          retention-days: 1
 
   deploy:
     runs-on: ubuntu-latest
     needs: build
-    
+    environment:
+      name: 'Production'
+      url: ${{ steps.deploy-to-webapp.outputs.webapp-url }}
+
     steps:
       - name: Download artifact from build job
         uses: actions/download-artifact@v4
         with:
           name: node-app
-      
+          path: .
+
       - name: 'Deploy to Azure Web App'
+        id: deploy-to-webapp
         uses: azure/webapps-deploy@v3
         with:
           app-name: 'VendorCheckApi'
