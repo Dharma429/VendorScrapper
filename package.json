@@ -4,11 +4,10 @@
   "description": "Backend service to analyze product pages and generate checkout questions.",
   "main": "index.js",
   "scripts": {
-    "start": "./start.sh",
+    "start": "node index.js",
     "dev": "node --watch index.js",
-    "postinstall": "npx playwright install chromium",
-    "install-browsers": "npx playwright install chromium",
-    "docker-start": "node install-browsers.js && node index.js",
+    "docker:build": "docker build -t vendor-check-api .",
+    "docker:run": "docker run -p 8080:8080 vendor-check-api",
     "test": "echo \"No tests specified\" && exit 0"
   },
   "engines": {
@@ -37,8 +36,5 @@
     "playwright": "^1.40.0",
     "sharp": "^0.32.6",
     "user-agents": "^1.1.582"
-  },
-  "devDependencies": {
-    "@playwright/test": "^1.40.0"
   }
 }

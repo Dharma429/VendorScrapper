@@ -4,19 +4,11 @@ const cors = require('cors');
 const { chromium } = require('playwright');
 const fs = require('fs').promises;
 const path = require('path');
-const { execSync } = require('child_process');
 
-// === Enhanced Configuration ===
+// === Configuration ===
 const CONFIG = {
-  PORT: process.env.PORT || 3001,
+  PORT: process.env.PORT || 8080,
   SCREENSHOT_DIR: 'screenshots',
-  WAIT_TIMES: {
-    PAGE_LOAD: 3500,
-    AFTER_CLICK: 3500,
-    EXTENDED_WAIT: 19500,
-    BETWEEN_URLS: 2000,
-    FORM_SUBMIT: 5000
-  },
   BROWSER: {
     HEADLESS: true,
     ARGS: [
@@ -29,43 +21,15 @@ const CONFIG = {
   }
 };
 
-// === Browser Installation Check ===
-class BrowserInstaller {
-  static async ensureBrowserInstalled() {
-    try {
-      console.log('🔍 Checking if Playwright browser is available...');
-      
-      // Set the browser path explicitly
-      process.env.PLAYWRIGHT_BROWSERS_PATH = './node_modules/playwright/.local-browsers';
-      
-      // Try to launch browser to verify installation
-      const browser = await chromium.launch({ 
-        headless: true,
-        args: CONFIG.BROWSER.ARGS 
-      });
-      await browser.close();
-      console.log('✅ Playwright browser is available');
-      return true;
-    } catch (error) {
-      console.log('❌ Browser not available:', error.message);
-      console.log('💡 Run: node install-browsers.js to install browsers');
-      return false;
-    }
-  }
-}
-
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// === Enhanced Browser Management ===
+// === Browser Management ===
 class BrowserManager {
   static async createBrowser() {
     try {
-      console.log('🔄 Attempting to launch browser...');
-      
-      // Set explicit browser path
-      process.env.PLAYWRIGHT_BROWSERS_PATH = './node_modules/playwright/.local-browsers';
+      console.log('🔄 Launching browser...');
       
       const browser = await chromium.launch({
         headless: CONFIG.BROWSER.HEADLESS,
@@ -82,12 +46,12 @@ class BrowserManager {
       
     } catch (error) {
       console.error('❌ Browser launch failed:', error.message);
-      throw new Error(`Browser not available. Please ensure browsers are installed: ${error.message}`);
+      throw new Error(`Browser launch failed: ${error.message}`);
     }
   }
 }
 
-// === Your Service Class ===
+// === Tax Form Service ===
 class TaxFormService {
   static async processAllUrls(businessName = 'AC Trench Corp') {
     let browser = null;
@@ -99,11 +63,26 @@ class TaxFormService {
       browser = b;
       const page = await context.newPage();
       
-      // Your existing processing logic here
-      console.log('📝 Processing business...');
-      await page.goto('https://example.com', { waitUntil: 'domcontentloaded' });
+      // Example: Navigate to a test page
+      console.log('📝 Navigating to example.com...');
+      await page.goto('https://example.com', { 
+        waitUntil: 'domcontentloaded',
+        timeout: 30000 
+      });
       
-      return { success: true, message: 'Processing completed' };
+      // Take a screenshot to verify it works
+      await fs.mkdir(CONFIG.SCREENSHOT_DIR, { recursive: true });
+      await page.screenshot({ 
+        path: path.join(CONFIG.SCREENSHOT_DIR, 'test.png'),
+        fullPage: true 
+      });
+      
+      console.log('✅ Processing completed successfully');
+      return { 
+        success: true, 
+        message: 'Processing completed',
+        screenshot: 'test.png'
+      };
       
     } catch (error) {
       console.error('❌ Error in TaxFormService:', error.message);
@@ -121,14 +100,41 @@ class TaxFormService {
 app.get('/status', (req, res) => {
   res.json({
     success: true,
-    message: 'API is V4.0 running!',
-    timestamp: new Date().toISOString()
+    message: 'API is V5.0 running!',
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development'
   });
+});
+
+app.get('/health', async (req, res) => {
+  try {
+    // Test browser availability
+    const browser = await chromium.launch({ 
+      headless: true,
+      args: CONFIG.BROWSER.ARGS 
+    });
+    await browser.close();
+    
+    res.json({ 
+      status: 'healthy',
+      browser: 'available',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    res.status(500).json({
+      status: 'unhealthy',
+      browser: 'unavailable',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
 });
 
 app.get('/fill-form', async (req, res) => {
   try {
     const businessName = req.query.businessName || 'AC Trench Corp';
+    console.log(`📋 Processing request for: ${businessName}`);
+    
     const result = await TaxFormService.processAllUrls(businessName);
     
     res.json({
@@ -141,54 +147,60 @@ app.get('/fill-form', async (req, res) => {
     console.error('Route error:', error.message);
     res.status(500).json({
       error: 'Failed to process request',
-      details: error.message,
-      solution: 'Browsers may not be installed. Check deployment logs.'
+      details: error.message
     });
   }
 });
 
-// Health check
-app.get('/health', async (req, res) => {
+// Test browser endpoint
+app.get('/test-browser', async (req, res) => {
+  let browser = null;
   try {
-    const browserAvailable = await BrowserInstaller.ensureBrowserInstalled();
+    console.log('🧪 Testing browser functionality...');
     
-    res.json({ 
-      status: browserAvailable ? 'healthy' : 'degraded',
-      browserAvailable,
-      timestamp: new Date().toISOString(),
-      message: browserAvailable ? 'Ready' : 'Browsers not installed'
+    const { browser: b, context } = await BrowserManager.createBrowser();
+    browser = b;
+    const page = await context.newPage();
+    
+    await page.goto('https://example.com', { waitUntil: 'domcontentloaded' });
+    const title = await page.title();
+    
+    await page.screenshot({ path: '/tmp/test-browser.png' });
+    
+    res.json({
+      success: true,
+      message: 'Browser test successful',
+      title: title,
+      screenshot: 'test-browser.png'
     });
+    
   } catch (error) {
     res.status(500).json({
-      status: 'unhealthy',
-      browserAvailable: false,
+      success: false,
       error: error.message
     });
+  } finally {
+    if (browser) {
+      await browser.close();
+    }
   }
 });
 
-// Install browsers endpoint (for manual installation)
-app.post('/install-browsers', async (req, res) => {
+// Initialize
+(async () => {
   try {
-    console.log('Manual browser installation requested...');
-    const { execSync } = require('child_process');
-    execSync('node install-browsers.js', { stdio: 'inherit' });
-    res.json({ success: true, message: 'Browsers installed successfully' });
+    await fs.mkdir(CONFIG.SCREENSHOT_DIR, { recursive: true });
+    await fs.mkdir('output', { recursive: true });
+    console.log('✅ Directories initialized');
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    console.error('❌ Directory initialization failed:', error);
   }
-});
-
-// Initialize browser check on startup
-BrowserInstaller.ensureBrowserInstalled().then(success => {
-  if (!success) {
-    console.log('⚠️  Browsers not available. Some functionality will be limited.');
-  }
-});
+})();
 
 // Start server
 app.listen(CONFIG.PORT, () => {
   console.log(`🚀 Server running on http://localhost:${CONFIG.PORT}`);
+  console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
 });
 
 module.exports = { app };
