@@ -26,7 +26,9 @@ const CONFIG = {
   },
   BROWSER: {
     HEADLESS: true,
-    ARGS: ['--no-sandbox', '--disable-setuid-sandbox']
+    ARGS: ['--no-sandbox',
+    '--disable-setuid-sandbox',
+    '--disable-dev-shm-usage']
   },
   URLS: [
     {
@@ -68,8 +70,19 @@ const CONFIG = {
     console.error('Error creating folders:', err);
   }
 })();
+
 // === Setup ===
 chromium.use(stealth);
+// === Ensure Chromium is installed (for Azure App Service) ===
+(async () => {
+  try {
+    // Try getting executable path
+    chromium.executablePath(); 
+  } catch (err) {
+    console.log('⚡ Chromium not found. Installing now...');
+    execSync('npx playwright install --with-deps chromium', { stdio: 'inherit' });
+  }
+})();
 const app = express();
 
 // Middleware
