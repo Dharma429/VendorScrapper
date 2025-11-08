@@ -1,0 +1,3 @@
+symbol_type,name,defined_in,line,used_anywhere
+method,TennisReportGenerator.calculate_strict_contact_quality,report_generator.py,319,False
+function,calculate_strict_contact_quality,report_generator.py,319,False
