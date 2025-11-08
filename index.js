@@ -56,9 +56,6 @@ const CONFIG = {
   },
   osha: {
     oshaLink: 'https://www.osha.gov/ords/imis/establishment.html'
-  },
-  googleLink: {
-    googlesearch: "https://www.google.com/search?q="
   }
 };
 
